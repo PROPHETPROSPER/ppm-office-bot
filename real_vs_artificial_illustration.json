@@ -1,0 +1,7 @@
+{
+ "disclaimer":"Synthetic examples, NOT a prediction and NOT evidence of fake engagement. Illustrates why reach without real connections can mislead.",
+ "scenarios":[
+   {"label":"Example A — fewer impressions, meaningful participation","impressions":1200,"profile_or_link_clicks":90,"verified_opt_ins":35,"verified_attendance":22,"returning_attendees":12},
+   {"label":"Example B — high impression count, little measurable action","impressions":20000,"profile_or_link_clicks":100,"verified_opt_ins":8,"verified_attendance":3,"returning_attendees":1}
+ ]
+}

@@ -1,0 +1,31 @@
+{
+ "timezone":"America/New_York",
+ "program":"Divine Visitation — 30 day fast",
+ "start_date":"2026-10-11","end_date":"2026-11-09",
+ "weekly_programs":[
+  {"id":"morning_prayer","days":["Monday","Wednesday","Friday"],"time":"09:00","format":"Morning Prayer","platform":"Existing ministry livestream","announcement_topic":"morning_prayer"},
+  {"id":"evening_zoom_prayer","days":["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],"start":"18:00","end":"19:00","platform":"Zoom","note":"Crystal and Adjovi are initial prayer-leader prospects. Alternating prayer points; confirm availability before assigning."},
+  {"id":"yt_teaching","days":["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],"start":"19:00","end":"21:00","platform":"YouTube","announcement_topic":"evening_teaching","note":"Sunday off; final Monday closing service can proceed."},
+  {"id":"paid_foundation","days":["Saturday"],"start":"14:00","end":"15:15","platform":"Private meeting","note":"No live class Oct 24, Watchman 2–4 PM conflict; send recording/assignment instead"}
+ ],
+ "specials":[
+  {"name":"Authority Over Resistance — Watchman Series","start_date":"2026-10-21","end_date":"2026-10-24","time":"14:00–16:00","status":"HOLD until website schedule corrected"}
+ ],
+ "communications":[
+  {"community":"Official public ministry channel","purpose":"Public invites, public live alerts, approved daily clip and brief recap"},
+  {"community":"Free mentorship","approx_people":80,"purpose":"Rolling four-week discipleship, group prompts, public teaching follow-ups"},
+  {"community":"Paid Spiritual Foundation","approx_people":35,"purpose":"Saturday class, twelve-week curriculum, structured feedback"}
+ ],
+ "staff_candidates":[
+  {"name":"Michelle","candidate_roles":["Connections Lead","Program Coordination","Backup Moderation"]},
+  {"name":"Crystal","candidate_roles":["Prayer Leader","Backup Moderation"],"not_roles":["Carousel Graphic Designer"]},
+  {"name":"Adjovi","candidate_roles":["Prayer Leader"]},
+  {"name":"Jia Jis","candidate_roles":["YouTube Moderator"]},
+  {"name":"Amoy","candidate_roles":["Video Editing"]},
+  {"name":"Alex","candidate_roles":["Video Editing"]},
+  {"name":"Davanee","candidate_roles":["Telegram Communications"]}
+ ],
+ "positions_open":["Carousel Graphic Designer","Connections Assistant 1","Connections Assistant 2","Office Caller 1","Office Caller 2","Prayer Leader Trainee","Automation Technical Administrator"],
+ "weekly_content_goal":{"carousels":6,"slides_per_carousel":3,"reels_min":6,"reels_max":12},
+ "status":"PLANNING_SCHEDULE_NOT_LIVE"
+}
