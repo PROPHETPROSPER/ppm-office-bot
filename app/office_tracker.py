@@ -3,7 +3,7 @@
 All writes use the same persistent SQLite volume as the bot. A Telegram group
 membership is never sufficient authorization to use office workflows.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 import re
 from app.storage import connect, now_iso, audit
@@ -70,7 +70,7 @@ def add_staff(owner_id,target_id,role):
     with connect() as db:
         ensure(db)
         req=db.execute("SELECT * FROM office_access_requests WHERE telegram_id=? AND status='PENDING'",(target_id,)).fetchone()
-        if not req:return 'There is no pending request from that ID in the linked office group. Ask them to send /requestaccess@PPMOfficeBot first.'
+        if not req:return 'There is no pending access request from that ID. Ask them to send /requestaccess to @PPMOfficeBot privately or in the office group.'
         db.execute('''INSERT INTO office_staff(telegram_id,first_name,username,role,added_by,added_at,active)
            VALUES(?,?,?,?,?,?,1) ON CONFLICT(telegram_id) DO UPDATE SET
            first_name=excluded.first_name,username=excluded.username,role=excluded.role,
@@ -100,6 +100,8 @@ def staff_text():
 
 def due_on(value):
     if value.strip().lower() in ('today','tonight'): return datetime.now(ET).date().isoformat()
+    if value.strip().lower() == 'tomorrow': return (datetime.now(ET).date()+timedelta(days=1)).isoformat()
+    if value.strip().lower() == 'yesterday': return (datetime.now(ET).date()-timedelta(days=1)).isoformat()
     try: return date.fromisoformat(value.strip()).isoformat()
     except ValueError: return None
 
@@ -196,13 +198,17 @@ def update_task(actor,chat_id,task_id,verb,is_coordinator=False):
 
 
 def seed_day(actor,chat_id,day=None):
-    d=day or datetime.now(ET).date()
+    d=date.fromisoformat(day) if isinstance(day,str) else (day or datetime.now(ET).date())
     wd=d.weekday();fasting=date(2026,10,11)<=d<=date(2026,11,9)
     roles=[]
     if wd in (0,2,4):roles+= [('Morning Prayer lead','9 AM'),('Morning Prayer Zoom host','9 AM')]
     if fasting:
         roles+= [('Zoom prayer leader','6 PM'),('Corporate prayer Zoom host','6 PM'),('Prayer backup','6 PM')]
         if wd!=6:roles+= [('YouTube moderator','7 PM'),('YouTube media coverage','7 PM')]
+    if wd == 5 and fasting and d != date(2026,10,24):
+        roles += [('Spiritual Foundation mentorship host','2 PM')]
+    if date(2026,10,21) <= d <= date(2026,10,24):
+        roles += [('Watchman Series Zoom host','2 PM'),('Watchman Series moderator','2 PM')]
     if d in (date(2026,10,16),date(2026,10,23),date(2026,10,30)):
         roles+= [('Friday Encounter ushers','7 PM'),('Friday Encounter AV','7 PM')]
     roles+=[('Connections follow-up coverage',''),('Office call-back coverage','')]
@@ -215,3 +221,87 @@ def seed_day(actor,chat_id,day=None):
             count+=cur.rowcount
     if count:audit(f'telegram:{actor}','office_day_setup',{'day':d.isoformat(),'created':count})
     return f'{d.isoformat()} office shift created: {count} new, unassigned roles.\nSend /pending to see them. Use /assign Task | @username | today | time to assign. Nothing was automatically confirmed.'
+
+
+def daily_report(chat_id, day=None):
+    """Owner/coordinator-facing facts from recorded tasks, never guessed attendance.
+
+    Program completion, attendance, and actual service quality are *not* inferred
+    from assignment status. The live report is deliberately marked as incomplete
+    until people record their work.
+    """
+    date_value = day or datetime.now(ET).date().isoformat()
+    if isinstance(date_value, date): date_value = date_value.isoformat()
+    if not date_value or not isinstance(date_value, str):
+        return 'Choose a valid date for the report.'
+    with connect() as db:
+        ensure(db)
+        records=db.execute("SELECT * FROM office_tasks WHERE chat_id=? AND due_date=? ORDER BY due_time,task_id",(chat_id,date_value)).fetchall()
+        counts={s:0 for s in TASK_STATUSES}
+        for t in records: counts[t['status']]+=1
+        total=len(records)
+        not_ready=counts['UNASSIGNED']+counts['ASSIGNED']+counts['DECLINED']
+        lines=[f'PPM OFFICE REPORT — {date_value}',
+               'Recorded assignment status only — not proof a ministry program happened.', '',
+               f'Positions recorded: {total}',
+               f'OPEN / UNASSIGNED: {counts["UNASSIGNED"]}',
+               f'AWAITING CONFIRMATION: {counts["ASSIGNED"]}',
+               f'WORKERS DECLINED: {counts["DECLINED"]}',
+               f'CONFIRMED TO SERVE: {counts["CONFIRMED"]}',
+               f'MARKED COMPLETE: {counts["DONE"]}',
+               f'CANCELED: {counts["CANCELED"]}', '',
+               f'NEEDS ATTENTION: {not_ready} position(s)']
+        if not records:
+            lines.extend(['','No assignments entered for this day.',
+                          'Coordinator: use /setupday and /assign before checking reports.'])
+        else:
+            problems=[t for t in records if t['status'] in ('UNASSIGNED','ASSIGNED','DECLINED')]
+            if problems:
+                lines.extend(['','UNRESOLVED POSITIONS'])
+                for t in problems[:20]:
+                    who=_display_person(db,t['assignee_id'])
+                    lines.append(f'#{t["task_id"]} {t["title"]} — {t["status"]} ({who})')
+                if len(problems)>20: lines.append(f'...and {len(problems)-20} more; check /pending.')
+            completed=[t for t in records if t['status']=='DONE']
+            if completed:
+                lines.extend(['','COMPLETED ASSIGNMENTS (STAFF-RECORDED)'])
+                for t in completed[:12]: lines.append(f'#{t["task_id"]} {t["title"]} — {_display_person(db,t["assignee_id"])}')
+                if len(completed)>12:lines.append(f'...and {len(completed)-12} more.')
+        lines.extend(['','MANUAL FOLLOW-UP FOR MICHELLE:',
+                      'Confirm what programs occurred, who actually served, any issues, and tomorrow’s preparations.',
+                      'A task marked DONE is a worker report, not independently verified attendance.'])
+        return '\n'.join(lines)[:3800]
+
+
+async def notify_assignee(group_id, saved_assignment_message, send_tg):
+    """Best-effort private notice to an approved assignee, not a public campaign.
+
+    A group command remains successful if Telegram prohibits the bot from
+    opening a private chat. Workers may always check /mytasks themselves.
+    """
+    match=re.match(r'ASSIGNMENT #(\d+) SAVED\b', saved_assignment_message or '')
+    if not match:
+        return ''
+    task_id=int(match.group(1))
+    with connect() as db:
+        ensure(db)
+        row=db.execute('''SELECT t.*, s.active FROM office_tasks t JOIN office_staff s
+                ON s.telegram_id=t.assignee_id WHERE t.task_id=? AND t.chat_id=?''',
+                (task_id,group_id)).fetchone()
+    if not row or row['status']!='ASSIGNED' or not row['active']:
+        return ''
+    uid=int(row['assignee_id'])
+    msg=(f'PPM OFFICE — NEW ASSIGNMENT #{task_id}\n'
+         f'{row["title"]}\nDate: {row["due_date"]}'
+         + (f' · {row["due_time"]}' if row['due_time'] else '')
+         + f'\n\nPlease reply with /confirm {task_id} or /decline {task_id}. '
+         'After serving, use /done '+str(task_id)+'. '
+         'Nobody is marked confirmed until you personally confirm.')
+    try:
+        await send_tg('sendMessage',{'chat_id':uid,'text':msg})
+        audit('office','assignment_notice_sent',{'task_id':task_id,'to':uid})
+        return '\n\nWorker notified privately. Confirmation is still required.'
+    except Exception:
+        audit('office','assignment_notice_failed',{'task_id':task_id,'to':uid})
+        return ('\n\nTelegram could not DM the worker. Ask them to open @PPMOfficeBot, '
+                'send /start, and then /mytasks. Assignment remains unconfirmed.')

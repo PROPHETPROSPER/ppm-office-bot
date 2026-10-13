@@ -1,0 +1,45 @@
+PROPHET PROSPER MINISTRIES — OFFICE BOT QUICK GUIDE
+PRIVATE OFFICE GROUP: PPM | OFFICE & OPERATIONS
+BOT: https://t.me/PPMOfficeBot
+
+1. FIRST TIME — MICHELLE
+Open the bot privately, press Start, and send /requestaccess.
+Ask Prophet Prosper to review /requests in his private bot chat and approve your Telegram ID using /staffadd YOUR_ID coordinator. You cannot assign shifts until approved.
+
+2. DAILY PLANNING — MICHELLE
+In the private office group send /setupday@PPMOfficeBot (or /setupday@PPMOfficeBot tomorrow).
+Then send /pending@PPMOfficeBot to see OPEN positions.
+To assign a confirmed, approved worker use:
+/assign@PPMOfficeBot Zoom prayer leader | @their_username | today | 6 PM
+You can also use their numeric Telegram ID instead of a username. To leave the position vacant use "open".
+Bot attempts to DM approved workers. If they have not started the bot, ask them to open it privately and send /start.
+
+3. WORKERS
+Open the bot privately, send /requestaccess, and wait for owner approval.
+Once approved, use /start and /mytasks.
+Confirm an offered shift: /confirm ID
+Cannot serve: /decline ID
+After actually serving: /done ID
+A worker is never considered confirmed just because they were assigned.
+
+4. DAILY REPORT — MICHELLE
+Use /report@PPMOfficeBot in the office group (or /report privately).
+The report lists exact numbers of OPEN, AWAITING, DECLINED, CONFIRMED and DONE records. It does not prove attendance or that a program occurred. Verify the program completion with your team.
+
+5. OWNER-ONLY
+/requests (without spaces) — See pending staff access requests in private bot chat.
+/staffadd TELEGRAM_ID coordinator
+/staffadd TELEGRAM_ID worker
+/staffremove TELEGRAM_ID
+Never assign announcement publishing or financial access to staff by default.
+
+6. SAFETY
+This bot is private-office only. Official Telegram channels and public ministry groups are not connected for automatic posting. Never upload member medical, legal, financial, or confidential personal details into assignment titles. Publishing and background scheduler remain disabled in private-test mode.
+
+CURRENT RULES
+Morning Prayer Monday/Wednesday/Friday 9 AM ET.
+Divine Visitation corporate prayer daily 6–7 PM ET October 11–November 9.
+YouTube teaching Monday–Saturday 7–9 PM ET, not Sunday.
+Spiritual Foundation mentorship Saturday 2 PM except October 24 conflict requiring confirmation.
+Watchman Series October 21–24 2–4 PM ET.
+Friday Encounter October 16, 23, 30 at 7 PM ET; conflicts should be manually resolved.

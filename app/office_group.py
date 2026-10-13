@@ -10,8 +10,8 @@ from app.settings import setting
 from app.roles import role_for
 from app.storage import connect, now_iso, audit
 
-COMMANDS = {'/start', '/help', '/today', '/schedule', '/team', '/pending', '/status', '/linkoffice', '/unlinkoffice', '/assign', '/setupday', '/mytasks', '/confirm', '/decline', '/done', '/requestaccess', '/myid'}
-PRIVATE_ONLY = {'/new', '/queue', '/preview', '/draft', '/approve', '/reject', '/send', '/alerts', '/connections', '/report'}
+COMMANDS = {'/start', '/help', '/today', '/schedule', '/team', '/pending', '/status', '/linkoffice', '/unlinkoffice', '/assign', '/setupday', '/mytasks', '/confirm', '/decline', '/done', '/requestaccess', '/myid', '/report'}
+PRIVATE_ONLY = {'/new', '/queue', '/preview', '/draft', '/approve', '/reject', '/send', '/alerts', '/connections'}
 
 
 def _programs(today: date):
@@ -80,6 +80,9 @@ async def handle_office_group_message(message, tg):
             return
         if not is_private_group():
             return
+        if chat.get('username'):
+            await reply('Only a private office group without a public @username may be linked. Remove its public username first.')
+            return
         # Link one group at a time; owner can intentionally move it to a replacement group.
         with connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS office_groups (chat_id INTEGER PRIMARY KEY, title TEXT NOT NULL, linked_by INTEGER NOT NULL, linked_at TEXT NOT NULL)')
@@ -98,7 +101,7 @@ async def handle_office_group_message(message, tg):
             await reply('This group is not linked yet. As the bot owner, send /linkoffice@PPMOfficeBot here. Group commands are restricted until linked.')
         return
 
-    from app.office_tracker import request_access, create_assignment, list_tasks, update_task, seed_day, staff_text
+    from app.office_tracker import request_access, create_assignment, list_tasks, update_task, seed_day, staff_text, daily_report, due_on, notify_assignee
     arg = text.split(maxsplit=1)[1].strip() if len(text.split(maxsplit=1)) == 2 else ''
     if cmd == '/myid':
         await reply(f'Your Telegram ID: {uid}.\nOnly the bot owner may approve access.')
@@ -112,13 +115,24 @@ async def handle_office_group_message(message, tg):
         if role not in ('owner','coordinator'):
             await reply('Only the owner or approved operations coordinator may create an office shift.')
         else:
-            await reply(seed_day(uid,chat_id))
+            day=due_on(arg) if arg else None
+            await reply(seed_day(uid,chat_id,day=day) if day or not arg else 'Use /setupday today, tomorrow, or YYYY-MM-DD.')
+        return
+    if cmd == '/report':
+        if role not in ('owner','coordinator'):
+            await reply('Daily reports are restricted to the owner and approved coordinator.')
+        elif arg and not due_on(arg):
+            await reply('Use /report today, yesterday, or YYYY-MM-DD.')
+        else:
+            await reply(daily_report(chat_id,due_on(arg) if arg else None))
         return
     if cmd == '/assign':
         if role not in ('owner','coordinator'):
             await reply('Only the owner or approved coordinator can assign staff.')
         else:
-            await reply(create_assignment(uid,chat_id,arg))
+            answer=create_assignment(uid,chat_id,arg)
+            notice=await notify_assignee(chat_id,answer,tg)
+            await reply(answer+notice)
         return
     if cmd in ('/confirm','/decline','/done'):
         if not arg.isdecimal():
@@ -145,10 +159,11 @@ async def handle_office_group_message(message, tg):
                     '/assign Task | @username | today | time — Assign a worker\n'
                     '/mytasks — View your responsibilities\n'
                     '/confirm ID, /decline ID, /done ID — Update your own tasks\n'
+                    '/report — Daily assignment status report (owner/coordinator)\n'
                     '/today — Today’s operational briefing\n'
                     '/schedule — Ministry programs and exceptions\n'
-                    '/team — Proposed team responsibilities\n'
-                    '/pending — Outstanding confirmation checklist\n'
+                    '/team — Approved office staff\n'
+                    '/pending — Live outstanding assignments\n'
                     '/status — Bot readiness status\n\n'
                     'Drafting, queue review, and approvals take place PRIVATELY at @PPMOfficeBot. '
                     'Only people individually approved by the owner have those permissions.')

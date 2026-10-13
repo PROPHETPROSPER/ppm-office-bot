@@ -67,8 +67,22 @@ async def _handle_update_impl(update):
             if office_only():
                 from app.roles import role_for
                 if role_for(uid)=='none':
-                    if cmd in ('/start','/help'):
-                        await tg('sendMessage',{'chat_id':uid,'text':'This is the private Prophet Prosper Ministries Office Bot. Please contact ministry administration for access. Public updates are available on the official ministry channel.'})
+                    # Requesting access never grants permissions. Permit it privately
+                    # so Michelle can onboard without posting her ID in a group.
+                    if cmd=='/requestaccess':
+                        from app.office_tracker import request_access
+                        answer=request_access(user,uid)
+                        await tg('sendMessage',{'chat_id':uid,'text':answer+'\n\nOwner: review with /requests in your private bot chat.'})
+                    elif cmd=='/myid':
+                        await tg('sendMessage',{'chat_id':uid,'text':f'Your Telegram ID: {uid}. Send /requestaccess to request office permission.'})
+                    elif cmd in ('/start','/help'):
+                        await tg('sendMessage',{'chat_id':uid,'text':
+                            'PROPHET PROSPER MINISTRIES — PRIVATE OFFICE BOT\n\n'
+                            'You do not have an approved office role yet.\n'
+                            'To request staff access, send /requestaccess.\n'
+                            'Your Telegram ID: '+str(uid)+'\n\n'
+                            'The ministry owner approves each request individually.\n'
+                            'Joining the office group does not grant access.'})
                     return
                 # Owner review and authorization stay in private messages.
                 if cmd in ('/requests','/staffadd','/staffremove'):
@@ -88,8 +102,8 @@ async def _handle_update_impl(update):
                             answer='Use /staffadd TELEGRAM_ID worker (or coordinator) or /staffremove TELEGRAM_ID.'
                     await tg('sendMessage',{'chat_id':uid,'text':answer})
                     return
-                if cmd in ('/setupday','/assign','/confirm','/decline','/done','/mytasks'):
-                    from app.office_tracker import seed_day, create_assignment, update_task, list_tasks
+                if cmd in ('/setupday','/assign','/confirm','/decline','/done','/mytasks','/report'):
+                    from app.office_tracker import seed_day, create_assignment, update_task, list_tasks, daily_report, due_on, notify_assignee
                     from app.roles import role_for
                     with connect() as db:
                         db.execute('CREATE TABLE IF NOT EXISTS office_groups (chat_id INTEGER PRIMARY KEY, title TEXT NOT NULL, linked_by INTEGER NOT NULL, linked_at TEXT NOT NULL)')
@@ -99,10 +113,15 @@ async def _handle_update_impl(update):
                     else:
                         group_id=int(linked['chat_id']);role=role_for(uid)
                         arg=message.get('text','').split(' ',1)[1].strip() if ' ' in message.get('text','') else ''
-                        if cmd in ('/assign','/setupday') and role not in ('owner','coordinator'):
-                            answer='Only the owner or approved coordinator can assign workers.'
-                        elif cmd=='/setupday':answer=seed_day(uid,group_id)
-                        elif cmd=='/assign':answer=create_assignment(uid,group_id,arg)
+                        if cmd in ('/assign','/setupday','/report') and role not in ('owner','coordinator'):
+                            answer='Only the owner or approved coordinator can manage office shifts and reports.'
+                        elif cmd=='/setupday':
+                            day=due_on(arg) if arg else None
+                            answer=seed_day(uid,group_id,day=day) if day or not arg else 'Use /setupday today, /setupday tomorrow or /setupday YYYY-MM-DD.'
+                        elif cmd=='/assign':
+                            answer=create_assignment(uid,group_id,arg)
+                            answer+=await notify_assignee(group_id,answer,tg)
+                        elif cmd=='/report':answer=daily_report(group_id, due_on(arg) if arg else None) if not arg or due_on(arg) else 'Use /report today, /report yesterday or /report YYYY-MM-DD.'
                         elif cmd=='/mytasks':answer=list_tasks(group_id,'mine',uid)
                         elif not arg.isdecimal():answer=f'Use {cmd} ASSIGNMENT_ID.'
                         else:answer=update_task(uid,group_id,int(arg),cmd[1:])
@@ -122,7 +141,10 @@ async def _handle_update_impl(update):
                         '/confirm ID /decline ID /done ID — Update own shifts\n'
                         '/assign Task | @username | today | time — Coordinator assign\n'
                         '/setupday — Create today’s unassigned staff shift\n'
-                        '/status — Readiness and safe-publishing status\n\n'
+                        '/report — Status report using recorded assignments\n'
+                        '/status — Readiness and safe-publishing status\n'
+                        '/requestaccess — Ask the owner for staff access\n'
+                        '/requests — Owner: view access requests\n\n'
                         'ANNOUNCEMENTS (ROLE-RESTRICTED)\n'
                         '/new — Create announcement for approval\n'
                         '/queue — Review the announcement queue\n'
