@@ -14,7 +14,9 @@ def role_for(uid):
     if uid in parse_ids(setting('TELEGRAM_APPROVER_USER_IDS')): return 'approver'
     if uid in parse_ids(setting('TELEGRAM_PUBLISHER_USER_IDS')): return 'publisher'
     if uid in parse_ids(setting('TELEGRAM_EDITOR_USER_IDS')) | parse_ids(setting('TELEGRAM_ADMIN_USER_IDS')): return 'editor'
-    return 'none'
+    # Staff membership never grants announcement approval or publishing.
+    from app.office_tracker import staff_role
+    return staff_role(uid)
 
 def can(uid,action):
     r=role_for(uid)

@@ -58,6 +58,10 @@ async def _handle_update_impl(update):
                 except Exception:
                     audit('telegram','welcome_failure',{'chat_id':chat_id})
         cmd=(message.get('text') or '').strip().split(' ')[0].split('@')[0]
+        if office_only() and chat.get('type') in ('group','supergroup'):
+            from app.office_group import handle_office_group_message
+            await handle_office_group_message(message,tg)
+            return
         if chat.get('type')=='private' and user.get('id'):
             uid=int(user['id'])
             if office_only():
@@ -66,13 +70,95 @@ async def _handle_update_impl(update):
                     if cmd in ('/start','/help'):
                         await tg('sendMessage',{'chat_id':uid,'text':'This is the private Prophet Prosper Ministries Office Bot. Please contact ministry administration for access. Public updates are available on the official ministry channel.'})
                     return
+                # Owner review and authorization stay in private messages.
+                if cmd in ('/requests','/staffadd','/staffremove'):
+                    from app.roles import role_for
+                    from app.office_tracker import requests_text, add_staff, remove_staff
+                    if role_for(uid)!='owner':
+                        answer='Only the ministry bot owner can authorize or revoke staff accounts.'
+                    elif cmd=='/requests':
+                        answer=requests_text()
+                    else:
+                        parts=message.get('text','').strip().split()
+                        if cmd=='/staffadd' and len(parts)==3 and parts[1].isdecimal():
+                            answer=add_staff(uid,int(parts[1]),parts[2].lower())
+                        elif cmd=='/staffremove' and len(parts)==2 and parts[1].isdecimal():
+                            answer=remove_staff(uid,int(parts[1]))
+                        else:
+                            answer='Use /staffadd TELEGRAM_ID worker (or coordinator) or /staffremove TELEGRAM_ID.'
+                    await tg('sendMessage',{'chat_id':uid,'text':answer})
+                    return
+                if cmd in ('/setupday','/assign','/confirm','/decline','/done','/mytasks'):
+                    from app.office_tracker import seed_day, create_assignment, update_task, list_tasks
+                    from app.roles import role_for
+                    with connect() as db:
+                        db.execute('CREATE TABLE IF NOT EXISTS office_groups (chat_id INTEGER PRIMARY KEY, title TEXT NOT NULL, linked_by INTEGER NOT NULL, linked_at TEXT NOT NULL)')
+                        linked=db.execute('SELECT chat_id FROM office_groups LIMIT 1').fetchone()
+                    if not linked:
+                        answer='No linked office group. Ask the owner to use /linkoffice@PPMOfficeBot there.'
+                    else:
+                        group_id=int(linked['chat_id']);role=role_for(uid)
+                        arg=message.get('text','').split(' ',1)[1].strip() if ' ' in message.get('text','') else ''
+                        if cmd in ('/assign','/setupday') and role not in ('owner','coordinator'):
+                            answer='Only the owner or approved coordinator can assign workers.'
+                        elif cmd=='/setupday':answer=seed_day(uid,group_id)
+                        elif cmd=='/assign':answer=create_assignment(uid,group_id,arg)
+                        elif cmd=='/mytasks':answer=list_tasks(group_id,'mine',uid)
+                        elif not arg.isdecimal():answer=f'Use {cmd} ASSIGNMENT_ID.'
+                        else:answer=update_task(uid,group_id,int(arg),cmd[1:])
+                    await tg('sendMessage',{'chat_id':uid,'text':answer[:3900]})
+                    return
                 if cmd in ('/start','/help'):
+                    from app.roles import role_for
                     await tg('sendMessage',{'chat_id':uid,'text':
-                        'Welcome to the PPM Office Bot. Use /new to draft an announcement, /queue to see requests, /preview ID to review, or /schedule for meeting times. Approval and publishing depend on your assigned role.'})
+                        'PROPHET PROSPER MINISTRIES — OFFICE BOT\n'
+                        f'Your current staff role: {role_for(uid).title()}\n\n'
+                        'OPERATIONS\n'
+                        '/today — Today’s ministry briefing\n'
+                        '/schedule — Ministry meeting times\n'
+                        '/team — Proposed staff responsibilities\n'
+                        '/pending — Live open assignments\n'
+                        '/mytasks — My assigned shifts\n'
+                        '/confirm ID /decline ID /done ID — Update own shifts\n'
+                        '/assign Task | @username | today | time — Coordinator assign\n'
+                        '/setupday — Create today’s unassigned staff shift\n'
+                        '/status — Readiness and safe-publishing status\n\n'
+                        'ANNOUNCEMENTS (ROLE-RESTRICTED)\n'
+                        '/new — Create announcement for approval\n'
+                        '/queue — Review the announcement queue\n'
+                        '/preview ID — Review an announcement\n'
+                        '/approve ID — Approve a draft (approvers/owner)\n'
+                        '/send ID — Publish approved draft when sending is enabled\n\n'
+                        'You may also use shared read-only commands in the linked PPM Office group. '
+                        'Owner: /requests, /staffadd TELEGRAM_ID worker (or coordinator), /staffremove TELEGRAM_ID.\n'
+                        'Approvals and publishing are only handled here in private chat.'})
+                    return
+                if cmd in ('/today','/team','/pending','/status'):
+                    from app.office_group import _today_text
+                    from app.office_tracker import list_tasks,staff_text
+                    with connect() as db:
+                        db.execute('CREATE TABLE IF NOT EXISTS office_groups (chat_id INTEGER PRIMARY KEY, title TEXT NOT NULL, linked_by INTEGER NOT NULL, linked_at TEXT NOT NULL)')
+                        linked=db.execute('SELECT chat_id FROM office_groups LIMIT 1').fetchone()
+                    group_id=int(linked['chat_id']) if linked else None
+                    if cmd=='/today':answer=_today_text(chat_id=group_id)
+                    elif cmd=='/team':answer=staff_text()+'\n\nOwner: staff access via /requests and /staffadd.'
+                    elif cmd=='/pending':answer=list_tasks(group_id,'pending') if group_id else 'No linked office group.'
+                    else:
+                        answer=('PPM OFFICE STATUS\n'
+                            '• Staff account: authorized\n'
+                            '• Public campaign sending: '+('ON' if setting('LIVE_SENDING_ENABLED','false').lower()=='true' else 'OFF (private test)')+'\n'
+                            '• Background scheduler: '+('ON' if setting('PPM_SCHEDULER_ENABLED','false').lower()=='true' else 'OFF (private test)')+'\n'
+                            '• Live staff tracker: ACTIVE')
+                    await tg('sendMessage',{'chat_id':uid,'text':answer[:3900]})
                     return
                 if cmd=='/schedule':
                     await tg('sendMessage',{'chat_id':uid,'text':
-                        'Morning Prayer: Mon/Wed/Fri 9 AM ET. Divine Visitation Zoom Prayer: daily 6–7 PM ET. YouTube Teaching: Mon–Sat 7–9 PM ET. Spiritual Foundation class: Saturday 2 PM ET except Oct 24.'})
+                        'PPM SCHEDULE (EASTERN TIME)\n'
+                        'Morning Prayer: Mon/Wed/Fri 9 AM ET.\n'
+                        'Divine Visitation Zoom Prayer: daily 6–7 PM ET through Nov 9.\n'
+                        'YouTube Teaching: Mon–Sat 7–9 PM ET through Nov 9 (no Sunday teaching).\n'
+                        'Spiritual Foundation: Saturday 2 PM ET, except Oct 24 overlap.\n'
+                        'Watchman Series: Oct 21–24, 2–4 PM ET. Links must be confirmed with Michelle.'})
                     return
                 if cmd in ('/queue','/preview','/draft','/approve','/reject','/send','/new'):
                     from app.admin_bot import handle_admin_message

@@ -1,0 +1,29 @@
+PPM OFFICE BOT v6 — LIVE ASSIGNMENTS
+
+Do not upload the ZIP itself to GitHub. Extract it first.
+Open: https://github.com/prophetprosper/ppm-office-bot/tree/main/app
+Click Add file > Upload files. From the extracted ZIP's app folder drag these 4 files:
+  office_group.py
+  office_tracker.py
+  roles.py
+  telegram.py
+Commit changes to branch main.
+Do not upload to a different folder or branch. Never change the Telegram token or Railway variables.
+
+On deployment, commands in linked OFFICE group:
+ /setupday@PPMOfficeBot           Owner/coordinator creates unassigned tasks for today
+ /pending@PPMOfficeBot            Real open assignment list and statuses
+ /assign@PPMOfficeBot Zoom host | open | today | 6 PM
+ /mytasks@PPMOfficeBot            Staff sees their own tasks
+ /requestaccess@PPMOfficeBot      Staff asks for access; membership alone gives none
+ /confirm@PPMOfficeBot ID         Assigned worker confirms their own task
+ /decline@PPMOfficeBot ID         Assigned worker declines
+ /done@PPMOfficeBot ID            Confirmed worker reports completion
+
+Owner private bot chat:
+ /requests                        See who asked for office access
+ /staffadd ID coordinator         Grant Michelle coordination (only after identity check)
+ /staffadd ID worker              Grant regular worker
+ /staffremove ID                  Revoke access
+
+SAFETY: Public live sending and background scheduler remain disabled. No task is assumed confirmed.
