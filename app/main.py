@@ -39,6 +39,34 @@ class CompareInput(BaseModel):
 
 @app.get('/health')
 def health():return {'healthy':True,'status':'DRAFT_MODE' if setting('LIVE_SENDING_ENABLED','false').lower()!='true' else 'SENDING_ENABLED','purchasing':'NEVER_SUPPORTED'}
+
+@app.get('/admin/1on1/status')
+def oneonone_status(_:str=Depends(admin)):
+    from app.oneonone import queue_summary
+    return queue_summary()
+
+@app.post('/admin/1on1/baseline')
+def oneonone_baseline(_:str=Depends(admin)):
+    from app.oneonone import sync
+    from app.oneonone_providers import WixSource,GoogleSheet
+    try:return sync(WixSource(),GoogleSheet(),baseline=True)
+    except (RuntimeError,ValueError):
+        raise HTTPException(409,'Baseline held; check credentials, source mapping, sheet reconciliation and existing baseline state') from None
+
+@app.post('/admin/1on1/sync')
+def oneonone_sync(_:str=Depends(admin)):
+    from app.oneonone import sync
+    from app.oneonone_providers import WixSource,GoogleSheet
+    try:return sync(WixSource(),GoogleSheet())
+    except (RuntimeError,ValueError):
+        raise HTTPException(409,'Sync held; review source mapping, baseline, staff configuration or uncertain Sheet writes') from None
+
+@app.post('/admin/1on1/deliver-staff-notices')
+async def oneonone_delivery(_:str=Depends(admin)):
+    from app.oneonone import deliver
+    try:return await deliver(tg)
+    except (RuntimeError,ValueError):
+        raise HTTPException(409,'Delivery held; verify bot identity, staff access and dedicated activation settings') from None
 @app.get('/admin/readiness')
 def readiness(_:str=Depends(admin)):
     """Deployment checks without ever returning secret values."""
