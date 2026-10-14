@@ -238,6 +238,10 @@ async def _handle_update_impl(update):
     data=cb.get('data',''); user=cb.get('from') or {}
     if not cb or not user.get('id'): return
     uid=int(user['id'])
+    if data.startswith('one:'):
+        from app.oneonone import callback
+        await callback(cb,tg)
+        return
     if office_only() and not data.startswith('admin:'): return
     # Only accept callbacks originally sent in the member's private DM.
     cb_chat=(cb.get('message') or {}).get('chat') or {}

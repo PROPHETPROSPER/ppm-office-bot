@@ -29,6 +29,10 @@ def run():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
+        if (os.getenv('PPM_1ON1_ENABLED','false').lower() == 'true' and
+                os.getenv('PPM_1ON1_POLLING_ENABLED','false').lower() == 'true'):
+            workers.append(subprocess.Popen([sys.executable, '-m', 'app.oneonone']))
+            print('Private 1-on-1 poller enabled; staff delivery has its own gate.', flush=True)
         if enabled:
             workers.append(subprocess.Popen([sys.executable, '-m', 'app.scheduler']))
             print('PPM scheduler enabled (publishing still controlled by separate gate).', flush=True)
